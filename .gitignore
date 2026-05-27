@@ -4,3 +4,4 @@ __pycache__/
 data/cogs/*.tif
 data/cogs/*.tiff
 data/cogs/registry.json
+.env

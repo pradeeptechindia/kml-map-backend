@@ -1,7 +1,8 @@
 import json
+import os
 from pathlib import Path
 
-DATA_DIR = Path("data/cogs")
+DATA_DIR = Path(os.environ["KML_MAP_DATA_DIR"])
 REGISTRY_PATH = DATA_DIR / "registry.json"
 
 
