@@ -1,3 +1,95 @@
+#app/main.py
+import os
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from rio_tiler.errors import TileOutsideBounds
+
+from app.routes import router
+
+app = FastAPI(title="KML Map Tile Server")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.environ["KML_MAP_CORS_ORIGINS"].split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(TileOutsideBounds)
+async def tile_out_of_bounds(request: Request, exc: TileOutsideBounds):
+    return Response(status_code=204)
+
+
+app.include_router(router)
+======================================================================================
+
+
+
+
+
+#app/registry.py
+import json
+import os
+from pathlib import Path
+
+DATA_DIR = Path(os.environ["KML_MAP_DATA_DIR"])
+REGISTRY_PATH = DATA_DIR / "registry.json"
+
+
+def _ensure():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not REGISTRY_PATH.exists():
+        REGISTRY_PATH.write_text("[]", encoding="utf-8")
+
+
+def read() -> list[dict]:
+    _ensure()
+    return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+
+
+def _write(entries: list[dict]):
+    _ensure()
+    REGISTRY_PATH.write_text(
+        json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def add(entry: dict) -> dict:
+    entries = read()
+    entries.append(entry)
+    _write(entries)
+    return entry
+
+
+def get(cog_id: str) -> dict | None:
+    for e in read():
+        if e["id"] == cog_id:
+            return e
+    return None
+
+
+def remove(cog_id: str) -> dict | None:
+    entries = read()
+    removed = None
+    kept = []
+    for e in entries:
+        if e["id"] == cog_id:
+            removed = e
+        else:
+            kept.append(e)
+    if removed is None:
+        return None
+    _write(kept)
+    return removed
+======================================================================================
+
+
+
+
+
 #app/routes.py
 import shutil
 import uuid
@@ -126,3 +218,15 @@ async def delete_cog(cog_id: str):
     if entry["filepath"]:
         Path(entry["filepath"]).unlink(missing_ok=True)
     return {"ok": True}
+======================================================================================
+
+
+
+
+
+#requirements.txt
+fastapi
+uvicorn[standard]
+titiler.core
+python-multipart
+python-dotenv
