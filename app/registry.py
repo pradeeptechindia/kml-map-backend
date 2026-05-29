@@ -39,6 +39,18 @@ def get(cog_id: str) -> dict | None:
     return None
 
 
+def get_by_scene(scene_id: str) -> list[dict]:
+    entries = [
+        e for e in read()
+        if e.get("scene_id") == scene_id
+    ]
+
+    return sorted(
+        entries,
+        key=lambda e: e.get("acquisition_date") or ""
+    )
+
+
 def remove(cog_id: str) -> dict | None:
     entries = read()
     removed = None

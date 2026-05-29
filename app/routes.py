@@ -8,6 +8,7 @@ import rasterio
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from titiler.core.factory import TilerFactory
+from rasterio.warp import transform_bounds
 
 from app import registry
 
@@ -18,12 +19,17 @@ class UrlInput(BaseModel):
     url: str
     name: str | None = None
     acquisition_date: str | None = None
+    scene_id: str | None = None
 
 
 def _get_bounds(source: str) -> list[float]:
     with rasterio.open(source) as src:
-        b = src.bounds
-        return [b.left, b.bottom, b.right, b.top]
+        b = transform_bounds(
+            src.crs,
+            "EPSG:4326",
+            *src.bounds
+        )
+        return list(b)
 
 
 def _resolve_source(entry: dict) -> str:
@@ -50,6 +56,7 @@ async def upload(
     file: UploadFile = File(...),
     name: str | None = None,
     acquisition_date: str | None = None,
+    scene_id: str | None = None,
 ):
     if not (file.filename and file.filename.lower().endswith((".tif", ".tiff"))):
         raise HTTPException(400, "Only .tif / .tiff files accepted")
@@ -74,6 +81,7 @@ async def upload(
         "url": None,
         "name": name or file.filename,
         "acquisition_date": acquisition_date,
+        "scene_id": scene_id,
         "bounds": bounds,
         "registered_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -94,6 +102,7 @@ async def register_url(body: UrlInput):
         "url": body.url,
         "name": body.name or body.url.split("/")[-1],
         "acquisition_date": body.acquisition_date,
+        "scene_id": body.scene_id,
         "bounds": bounds,
         "registered_at": datetime.now(timezone.utc).isoformat(),
     })
@@ -102,6 +111,11 @@ async def register_url(body: UrlInput):
 @router.get("")
 async def list_cogs():
     return registry.read()
+
+
+@router.get("/timeline/{scene_id}")
+async def get_timeline(scene_id: str):
+    return registry.get_by_scene(scene_id)
 
 
 @router.get("/{cog_id}")
